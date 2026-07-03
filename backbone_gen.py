@@ -41,5 +41,18 @@ class ProteinBackboneGenerator:
         return bundle_helices
 
 
-bundle = ProteinBackboneGenerator().generate_bundle(10)
+bundle = ProteinBackboneGenerator().generate_bundle(20)
 print(bundle)
+
+#3D map visualisation
+
+fig = plt.figure(figsize=(8, 8))
+ax = fig.add_subplot(projection='3d')
+for index, helix in enumerate(bundle):
+    x_coords = helix[:, 0]
+    y_coords = helix[:, 1]
+    z_coords = helix[:, 2]
+
+    ax.plot(x_coords,y_coords,z_coords)
+ax.set_box_aspect([1,1,1])
+plt.show()
