@@ -40,33 +40,51 @@ def parse_pdb(file_path):
         return atoms,graph
                     
 
-REACTION_RULES = {
+REACTION_RULES = {     #Currently not compatible with methanol, methanonic acid, single carbons etc
     "phosphate_hydrolysis":{
         "target_element": "P",
         "required_neighbours": ["O","O","O","O"]
+    },
+
+    "peptide_cleavage":{
+        "target_element": "C",
+        "required_neighbours": ["C","O","N"]
+    },
+
+    "ester_hydrolysis":{
+        "target_element": "C",
+        "required_neighbours": ["C","O","O"] 
+    },
+
+    "primary_alcohol_oxidation":{
+        "target_element": "C",
+        "required_neighbours": ["C","O","H","H"]
+    },
+
+    "secondary_alcohol_oxidation":{
+            "target_element": "C",
+            "required_neighbours": ["C","C","O","H",]
     }
-
-
 }         
 
 def find_target_atom(atoms,graph,rule):
-    target_elem = rule["target_element"]
-    req_neighbours = sorted(rule["required_neighbours"])
+    target_elem = rule["target_element"]             
+    req_neighbours = sorted(rule["required_neighbours"])  #Sorted; so that they can be checked in any order
 
     matched_targets = []
 
     for atom_id, data in atoms.items():
-        if data["element"] != target_elem:
+        if data["element"] != target_elem:      #Skips if element does not match
             continue
 
         neighbours = graph.get(atom_id,[])
-        if len(neighbours) != len(req_neighbours):
+        if len(neighbours) != len(req_neighbours):      #Skips if the number of neighbouring elements does not match
             continue
 
         neighbour_elements = []
         for nbr_id in neighbours:
             if nbr_id in atoms:
-                neighbour_elements.append(atoms[nbr_id]["element"])
+                neighbour_elements.append(atoms[nbr_id]["element"])   #Finds the neighbouring elements
 
         if sorted(neighbour_elements) == req_neighbours:
             matched_targets.append(atom_id)
@@ -78,7 +96,7 @@ def find_target_atom(atoms,graph,rule):
 # --------------------
 #      EXECUTION
 # --------------------
-file_path = r"C:\Users\Austin Boole\OneDrive\Documents\PEME\inputs\a73c0b85-d39c-4b0d-be5e-26a31ef19321.pdb" #Substrate is G6P in this instance
+file_path = r"C:\Users\Austin Boole\OneDrive\Documents\PEME\inputs\PDBAdenosineTriphosphate.pdb" #Substrate is ATP in this instance
 
 atoms, graph = parse_pdb(file_path)
 targets = find_target_atom(atoms, graph, REACTION_RULES["phosphate_hydrolysis"])
