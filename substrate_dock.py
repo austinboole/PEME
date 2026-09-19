@@ -43,33 +43,17 @@ def parse_pdb(file_path):
 REACTION_RULES = {     #Currently not compatible with methanol, methanonic acid, single carbons etc
     "phosphate_hydrolysis":{
         "target_element": "P",
-        "required_neighbours": ["O","O","O","O"]
+        "leaving_group": {
+            "element": "O",
+            "bonded_to": ["C","P"]
+        },
+        "attack_dist": 2.9
     },
-
-    "peptide_cleavage":{
-        "target_element": "C",
-        "required_neighbours": ["C","O","N"]
-    },
-
-    "ester_hydrolysis":{
-        "target_element": "C",
-        "required_neighbours": ["C","O","O"] 
-    },
-
-    "primary_alcohol_oxidation":{
-        "target_element": "C",
-        "required_neighbours": ["C","O","H","H"]
-    },
-
-    "secondary_alcohol_oxidation":{
-            "target_element": "C",
-            "required_neighbours": ["C","C","O","H",]
-    }
 }         
 
 def find_target_atom(atoms,graph,rule):
     target_elem = rule["target_element"]             
-    req_neighbours = sorted(rule["required_neighbours"])  #Sorted; so that they can be checked in any order
+    lg_rule = rule["leaving_group"] 
 
     matched_targets = []
 
@@ -78,16 +62,28 @@ def find_target_atom(atoms,graph,rule):
             continue
 
         neighbours = graph.get(atom_id,[])
-        if len(neighbours) != len(req_neighbours):      #Skips if the number of neighbouring elements does not match
-            continue
 
-        neighbour_elements = []
         for nbr_id in neighbours:
-            if nbr_id in atoms:
-                neighbour_elements.append(atoms[nbr_id]["element"])   #Finds the neighbouring elements
+            if nbr_id not in atoms:
+                continue
 
-        if sorted(neighbour_elements) == req_neighbours:
-            matched_targets.append(atom_id)
+            if atoms[nbr_id]["element"] == lg_rule["element"]:
+
+                is_leaving_group = False
+
+                for secondary_id in graph.get(nbr_id,[]):
+                    if secondary_id == atom_id or secondary_id not in atoms:
+                        continue
+
+                    if atoms[secondary_id]["element"] in lg_rule["bonded_to"]:
+                        is_leaving_group = True
+                        break
+
+                if is_leaving_group == True:
+                    matched_targets.append({
+                        "target_id": atom_id,
+                        "leaving_group_id": nbr_id
+                    })
 
     return matched_targets
 
@@ -96,7 +92,7 @@ def find_target_atom(atoms,graph,rule):
 # --------------------
 #      EXECUTION
 # --------------------
-file_path = r"C:\Users\Austin Boole\OneDrive\Documents\PEME\inputs\PDBAdenosineTriphosphate.pdb" #Substrate is ATP in this instance
+file_path = r"C:\Users\Austin Boole\OneDrive\Documents\PEME\inputs\PDBGlucose6Phosphate.pdb" #Substrate is ATP in this instance
 
 atoms, graph = parse_pdb(file_path)
 targets = find_target_atom(atoms, graph, REACTION_RULES["phosphate_hydrolysis"])
