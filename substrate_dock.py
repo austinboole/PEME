@@ -53,6 +53,7 @@ REACTION_RULES = {
             "c": 0.60,       
             "bond_order": 0.5 
         }
+
     }
 }
          
@@ -177,7 +178,59 @@ def apply_trigonal_bipyramidal_shift(atoms, target_id, leaving_group_id, coordin
 
         else:
             raise ValueError(f"Atom {nbr_id} is collinear with the apical axis.")
-    return updated_coords
+    
+    return updated_coords, apical_unit
+
+def generate_oxyanion_hole_anchors(updated_coords, central_id, target_oxygen_ids, apical_unit, offset_distance=3.0, angular_offset=60):
+    central_coord = updated_coords[central_id]
+    anchors = {}
+
+    theta = np.radians(angular_offset)
+
+
+    for oxy_id in target_oxygen_ids:
+        oxy_coord = updated_coords[oxy_id]
+
+        u_outward = (oxy_coord - central_coord)
+        u_outward /= np.linalg.norm(u_outward)
+
+        in_plane_perp = np.cross(apical_unit, u_outward)
+        in_plane_perp /= np.linalg.norm(in_plane_perp)
+
+        for i, sign in enumerate([1.0, -1.0]):
+            tilted_dir = (u_outward * np.cos(theta)) + (in_plane_perp * (np.sin(theta) * sign))
+            
+            anchor_key = f"oxyanion_anchor_{oxy_id}_lobe{i+1}"
+            anchors[anchor_key] = oxy_coord + (tilted_dir * offset_distance)
+
+
+    return anchors
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def export_transition_state_pdb(orig_file_path, new_file_path, updated_coords):
@@ -191,7 +244,14 @@ def export_transition_state_pdb(orig_file_path, new_file_path, updated_coords):
             if line.startswith("CONECT") and "nucleophile" in updated_coords and nuc_added == False:
                 nuc_coord = updated_coords["nucleophile"]
                 output_lines.append(f"HETATM 9999  O   NUC A 999    {nuc_coord[0]:8.3f}{nuc_coord[1]:8.3f}{nuc_coord[2]:8.3f}  1.00 20.00           O\n")
-                nuc_added = True  # Set the flag to True after adding the nucleophile
+
+                serial_counter = 9000
+                for anchor_key, coord in updated_coords.items():
+                    if isinstance(anchor_key, str) and anchor_key.startswith("oxyanion_anchor"):                    
+                        output_lines.append(f"HETATM {serial_counter:4d}  O   ANC A {serial_counter:3d}   {coord[0]:8.3f}{coord[1]:8.3f}{coord[2]:8.3f}  1.00 20.00           O\n")
+                        serial_counter += 1
+
+                nuc_added = True  # Set the flag to True after adding the nucleophile and anchors
 
             if line.startswith("HETATM") or line.startswith("ATOM"):
                 atom_id = int(line[7:11].strip())
@@ -199,12 +259,12 @@ def export_transition_state_pdb(orig_file_path, new_file_path, updated_coords):
                     coord = updated_coords[atom_id]
                     line = f"{line[:30]}{coord[0]:8.3f}{coord[1]:8.3f}{coord[2]:8.3f}{line[54:]}"
 
-            output_lines.append(line)
+            output_lines.append(line)           
 
     with open(new_file_path, 'w') as f:
         f.writelines(output_lines)
 
-    print(f"Transition state PDB exported to {new_file_path}")
+    print(f"Transition state and anchors PDB exported to {new_file_path}")
 
 
 
@@ -226,7 +286,7 @@ if targets:
     t = targets[0]
     d_ts = calc_linus_pauling_tranistion_state_distance(rule["pauling_params"])
 
-    updated_coords = apply_trigonal_bipyramidal_shift(
+    updated_coords, apical_unit = apply_trigonal_bipyramidal_shift(
         atoms = atoms,
         target_id = t["target_atom_id"],
         leaving_group_id = t["leaving_group_id"],
@@ -234,10 +294,23 @@ if targets:
         d_ts = d_ts
     )
 
+
+    anchors = generate_oxyanion_hole_anchors(
+        updated_coords = updated_coords,
+        central_id = t["target_atom_id"],
+        target_oxygen_ids = t["coordinating_neighbour_ids"],
+        apical_unit = apical_unit
+    )
+
+    updated_coords.update(anchors)
+
+
     print("Updated Coordinates:")
     for atom_id, coord in updated_coords.items():
         if atom_id == "nucleophile":
             print(f"Nucleophile Position: {coord}")
+        elif isinstance(atom_id, str) and atom_id.startswith("oxyanion_anchor"):
+            print(f"Anchor {atom_id}: {coord}")
         else:
             print(f"Atom ID {atom_id} ({atoms[atom_id]['element']}): {coord}")
 
